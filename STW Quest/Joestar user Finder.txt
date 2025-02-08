@@ -1,0 +1,271 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+local ESPEnabled = false
+local ESPToggleKey = Enum.KeyCode.F5
+local TargetPlayerCount = 17 -- Target player count for server hopping (currently unused in server hopping logic)
+local GameId = 2809202155 -- Game ID for server hopping
+local CurrentServerId = game.JobId -- Store the current server's job ID
+
+-- Create the GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 100, 0, 50)
+ToggleButton.Position = UDim2.new(0, 10, 0, 10)
+ToggleButton.Text = "ESP: OFF"
+ToggleButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.Parent = ScreenGui
+
+local HopButton = Instance.new("TextButton")
+HopButton.Size = UDim2.new(0, 100, 0, 50)
+HopButton.Position = UDim2.new(0, 120, 0, 10)
+HopButton.Text = "Hop Server"
+HopButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+HopButton.TextColor3 = Color3.new(1, 1, 1)
+HopButton.Parent = ScreenGui
+
+local function CreateESP(Player, part)
+    --Box
+    local box = Instance.new("BoxHandleAdornment")
+    box.Size = part.Size + Vector3.new(0.1, 0.1, 0.1)
+    box.Adornee = part
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Transparency = 0.5
+    box.Color3 = Color3.new(1, 0, 0) -- Red color
+    box.Parent = part
+
+    --Name Tag
+    local Character = Player.Character
+    if not Character then return end
+
+    local NameTag = Instance.new("BillboardGui")
+    NameTag.Size = UDim2.new(0, 200, 0, 50)
+    NameTag.StudsOffset = Vector3.new(0, 2, 0)
+    NameTag.Adornee = Character:FindFirstChild("Head")
+    NameTag.AlwaysOnTop = true
+    NameTag.Parent = Character
+
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(1, 0, 1, 0)
+    NameLabel.Text = Player.Name
+    NameLabel.TextColor3 = Color3.new(1, 1, 1)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Parent = NameTag
+end
+
+-- Function to remove ESP
+local function RemoveESP(part)
+    for _, child in ipairs(part:GetChildren()) do
+        if child:IsA("BoxHandleAdornment") or child:IsA("BillboardGui") then
+            child:Destroy()
+        end
+    end
+    local character = Players:GetPlayerFromCharacter(part.Parent)
+    if character then
+        local head = character.Character:FindFirstChild("Head")
+         if head then
+            for _, child in ipairs(head:GetChildren()) do
+                 if child:IsA("BillboardGui") then
+                       child:Destroy()
+                 end
+            end
+         end
+    end
+end
+
+local function CheckValidStand(standName)
+    local validStands = {
+        "Star Platinum", "Hermit Purple", "Star Platinum: The World",
+        "Crazy Diamond", "Gold Experience", "Gold Experience Requiem",
+        "Stone Free", "Tusk ACT 1", "Tusk ACT 2", "Tusk ACT 3",
+        "Tusk ACT 4", "Soft & Wet", "Soft & Wet Go Beyond"
+    }
+    return table.find(validStands, standName) ~= nil
+end
+
+local function UpdateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local playerStats = player:FindFirstChild("PlayerStats")
+            if playerStats then
+                local standValue = playerStats:FindFirstChild("Stand")
+                if standValue and CheckValidStand(standValue.Value) then
+                    local playerModel = workspace.Living:FindFirstChild(player.Name)
+                    if playerModel then
+                        for _, part in ipairs(playerModel:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                if ESPEnabled then
+                                    CreateESP(player, part)
+                                else
+                                    RemoveESP(part)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function OnPlayerAdded(player)
+    player.CharacterAdded:Connect(function()
+        local playerStats = player:FindFirstChild("PlayerStats")
+        if playerStats then
+            local standValue = playerStats:FindFirstChild("Stand")
+            if standValue and CheckValidStand(standValue.Value) then
+                local playerModel = workspace.Living:FindFirstChild(player.Name)
+                if playerModel then
+                    for _, part in ipairs(playerModel:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            if ESPEnabled then
+                                CreateESP(player, part)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function OnPlayerRemoving(player)
+    local playerModel = workspace.Living:FindFirstChild(player.Name)
+    if playerModel then
+        for _, part in ipairs(playerModel:GetDescendants()) do
+            if part:IsA("BasePart") then
+                RemoveESP(part)
+            end
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(OnPlayerAdded)
+Players.PlayerRemoving:Connect(OnPlayerRemoving)
+
+-- Toggle ESP with the button
+ToggleButton.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    UpdateESP()
+    ToggleButton.Text = ESPEnabled and "ESP: ON" or "ESP: OFF"
+    ToggleButton.BackgroundColor3 = ESPEnabled and Color3.new(0, 0.5, 0) or Color3.new(0.2, 0.2, 0.2)
+end)
+
+-- Toggle ESP with the key
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == ESPToggleKey then
+        ESPEnabled = not ESPEnabled
+        UpdateESP()
+        ToggleButton.Text = ESPEnabled and "ESP: ON" or "ESP: OFF"
+        ToggleButton.BackgroundColor3 = ESPEnabled and Color3.new(0, 0.5, 0) or Color3.new(0.2, 0.2, 0.2)
+    end
+end)
+
+-- Initial ESP setup for existing players
+for _, player in pairs(Players:GetPlayers()) do
+    OnPlayerAdded(player)
+end
+
+
+local function CheckCurrentServer()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local playerStats = player:FindFirstChild("PlayerStats")
+            if playerStats then
+                local standValue = playerStats:FindFirstChild("Stand")
+                if standValue and CheckValidStand(standValue.Value) then
+                    return true -- Found a player with the required skills
+                end
+            end
+        end
+    end
+    return false -- No players with the required skills
+end
+
+-- Server Hop Functionality (Modified to hop to any server)
+local function HopServer()
+    local PlaceID = GameId
+    local TPS = TeleportService
+    local Http = HttpService
+    local Player = LocalPlayer
+
+    local Servers = Http:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..PlaceID.."/servers/Public?sortOrder=Asc&limit=100"))
+
+    for _, v in pairs(Servers.data) do
+        if v.playing < v.maxPlayers and v.id ~= game.JobId then
+            TPS:TeleportToPlaceInstance(PlaceID, v.id, Player)
+            return -- Exit the function after teleporting to the first available server
+        end
+    end
+    warn("No suitable servers found. Staying in current server.")
+end
+
+-- Hop Server Button
+HopButton.MouseButton1Click:Connect(function()
+    HopServer()
+end)
+
+-- Auto-hop on script start
+local function AutoHopServer()
+    local PlaceID = GameId
+    local TPS = TeleportService
+    local Http = HttpService
+    local Player = LocalPlayer
+
+    local Servers = Http:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..PlaceID.."/servers/Public?sortOrder=Asc&limit=100"))
+
+    if not CheckCurrentServer() then
+        print("No players with required skills found. Hopping to another server...")
+        for _, v in pairs(Servers.data) do
+            if v.playing < v.maxPlayers and v.id ~= game.JobId then
+                TPS:TeleportToPlaceInstance(PlaceID, v.id, Player)
+                return -- Exit the function after teleporting to the first available server
+            end
+        end
+        warn("No suitable servers found. Staying in current server.")
+    else
+        print("Players with required skills found. Staying in the current server.")
+    end
+end
+
+AutoHopServer()
+
+-- Ctrl Teleport (Hold Ctrl to teleport 10 studs every 0.05s)
+local CtrlHeld = false
+local TeleportDistance = 10 -- Distance to teleport
+local TeleportInterval = 0.05 -- Interval between teleports
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
+        CtrlHeld = true
+        local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+        while CtrlHeld do
+            -- Check if the character still exists
+            if not Character or not RootPart or not RootPart.Parent then
+                CtrlHeld = false
+                break
+            end
+            local Direction = RootPart.CFrame.LookVector
+            RootPart.CFrame = RootPart.CFrame + Direction * TeleportDistance
+            wait(TeleportInterval) -- Changed from RunService.Heartbeat:Wait()
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
+        CtrlHeld = false
+    end
+end)
