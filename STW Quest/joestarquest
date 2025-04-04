@@ -105,6 +105,26 @@ local function CheckValidStand(standName)
     return table.find(validStands, standName) ~= nil
 end
 
+-- Function to reattach ESP to another valid player after killing
+local function ReattachESPToNewPlayer()
+    -- Ensure you update the ESP on the players who are still alive and valid
+    for _, plr in ipairs(game.Players:GetPlayers()) do
+        if plr ~= game.Players.LocalPlayer then
+            -- Check if ESP is enabled
+            if ESPEnabled then
+                -- Ensure the player is valid and create ESP if necessary
+                if plr.Character and plr.Character:FindFirstChild("Head") then
+                    local standValue = plr:FindFirstChild("PlayerStats"):FindFirstChild("Stand")
+                    if standValue and CheckValidStand(standValue.Value) then
+                        CreateESP(plr) -- Re-create ESP for the new valid player
+                    end
+                end
+            end
+        end
+    end
+end
+
+
 local function UpdateESP()
     TotalValidPlayers = 0
     for _, player in ipairs(Players:GetPlayers()) do
