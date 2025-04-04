@@ -12,6 +12,10 @@ local TargetPlayerCount = 17 -- Target player count for server hopping (currentl
 local GameId = 2809202155 -- Game ID for server hopping
 local CurrentServerId = game.JobId -- Store the current server's job ID
 
+local TotalKills = 0
+local TotalValidPlayers = 0
+local LastQuestProgress = nil
+
 -- Create the GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -32,18 +36,28 @@ HopButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
 HopButton.TextColor3 = Color3.new(1, 1, 1)
 HopButton.Parent = ScreenGui
 
+local CounterLabel = Instance.new("TextLabel")
+CounterLabel.Size = UDim2.new(0, 200, 0, 50)
+CounterLabel.Position = UDim2.new(0, 230, 0, 10)
+CounterLabel.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+CounterLabel.TextColor3 = Color3.new(1, 1, 1)
+CounterLabel.Text = "Kills: 0 / Valid: 0"
+CounterLabel.Parent = ScreenGui
+
+local function UpdateCounter()
+    CounterLabel.Text = "Kills: " .. TotalKills .. " / Valid: " .. TotalValidPlayers
+end
+
 local function CreateESP(Player, part)
-    --Box
     local box = Instance.new("BoxHandleAdornment")
     box.Size = part.Size + Vector3.new(0.1, 0.1, 0.1)
     box.Adornee = part
     box.AlwaysOnTop = true
     box.ZIndex = 10
     box.Transparency = 0.5
-    box.Color3 = Color3.new(1, 0, 0) -- Red color
+    box.Color3 = Color3.new(1, 0, 0)
     box.Parent = part
 
-    --Name Tag
     local Character = Player.Character
     if not Character then return end
 
@@ -62,7 +76,6 @@ local function CreateESP(Player, part)
     NameLabel.Parent = NameTag
 end
 
--- Function to remove ESP
 local function RemoveESP(part)
     for _, child in ipairs(part:GetChildren()) do
         if child:IsA("BoxHandleAdornment") or child:IsA("BillboardGui") then
@@ -72,13 +85,13 @@ local function RemoveESP(part)
     local character = Players:GetPlayerFromCharacter(part.Parent)
     if character then
         local head = character.Character:FindFirstChild("Head")
-         if head then
+        if head then
             for _, child in ipairs(head:GetChildren()) do
-                 if child:IsA("BillboardGui") then
-                       child:Destroy()
-                 end
+                if child:IsA("BillboardGui") then
+                    child:Destroy()
+                end
             end
-         end
+        end
     end
 end
 
@@ -93,12 +106,14 @@ local function CheckValidStand(standName)
 end
 
 local function UpdateESP()
+    TotalValidPlayers = 0
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local playerStats = player:FindFirstChild("PlayerStats")
             if playerStats then
                 local standValue = playerStats:FindFirstChild("Stand")
                 if standValue and CheckValidStand(standValue.Value) then
+                    TotalValidPlayers += 1
                     local playerModel = workspace.Living:FindFirstChild(player.Name)
                     if playerModel then
                         for _, part in ipairs(playerModel:GetDescendants()) do
@@ -115,6 +130,7 @@ local function UpdateESP()
             end
         end
     end
+    UpdateCounter()
 end
 
 local function OnPlayerAdded(player)
@@ -135,6 +151,7 @@ local function OnPlayerAdded(player)
                 end
             end
         end
+        UpdateESP()
     end)
 end
 
@@ -147,12 +164,12 @@ local function OnPlayerRemoving(player)
             end
         end
     end
+    UpdateESP()
 end
 
 Players.PlayerAdded:Connect(OnPlayerAdded)
 Players.PlayerRemoving:Connect(OnPlayerRemoving)
 
--- Toggle ESP with the button
 ToggleButton.MouseButton1Click:Connect(function()
     ESPEnabled = not ESPEnabled
     UpdateESP()
@@ -160,7 +177,6 @@ ToggleButton.MouseButton1Click:Connect(function()
     ToggleButton.BackgroundColor3 = ESPEnabled and Color3.new(0, 0.5, 0) or Color3.new(0.2, 0.2, 0.2)
 end)
 
--- Toggle ESP with the key
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == ESPToggleKey then
@@ -171,11 +187,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Initial ESP setup for existing players
 for _, player in pairs(Players:GetPlayers()) do
     OnPlayerAdded(player)
 end
-
 
 local function CheckCurrentServer()
     for _, player in ipairs(Players:GetPlayers()) do
@@ -184,15 +198,14 @@ local function CheckCurrentServer()
             if playerStats then
                 local standValue = playerStats:FindFirstChild("Stand")
                 if standValue and CheckValidStand(standValue.Value) then
-                    return true -- Found a player with the required skills
+                    return true
                 end
             end
         end
     end
-    return false -- No players with the required skills
+    return false
 end
 
--- Server Hop Functionality (Modified to hop to any server)
 local function HopServer()
     local PlaceID = GameId
     local TPS = TeleportService
@@ -204,18 +217,16 @@ local function HopServer()
     for _, v in pairs(Servers.data) do
         if v.playing < v.maxPlayers and v.id ~= game.JobId then
             TPS:TeleportToPlaceInstance(PlaceID, v.id, Player)
-            return -- Exit the function after teleporting to the first available server
+            return
         end
     end
     warn("No suitable servers found. Staying in current server.")
 end
 
--- Hop Server Button
 HopButton.MouseButton1Click:Connect(function()
     HopServer()
 end)
 
--- Auto-hop on script start
 local function AutoHopServer()
     local PlaceID = GameId
     local TPS = TeleportService
@@ -229,7 +240,7 @@ local function AutoHopServer()
         for _, v in pairs(Servers.data) do
             if v.playing < v.maxPlayers and v.id ~= game.JobId then
                 TPS:TeleportToPlaceInstance(PlaceID, v.id, Player)
-                return -- Exit the function after teleporting to the first available server
+                return
             end
         end
         warn("No suitable servers found. Staying in current server.")
@@ -240,10 +251,10 @@ end
 
 AutoHopServer()
 
--- Ctrl Teleport (Hold Ctrl to teleport 10 studs every 0.05s)
+-- Ctrl teleport
 local CtrlHeld = false
-local TeleportDistance = 10 -- Distance to teleport
-local TeleportInterval = 0.05 -- Interval between teleports
+local TeleportDistance = 10
+local TeleportInterval = 0.05
 
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
@@ -252,14 +263,13 @@ UserInputService.InputBegan:Connect(function(input)
         local RootPart = Character:WaitForChild("HumanoidRootPart")
 
         while CtrlHeld do
-            -- Check if the character still exists
             if not Character or not RootPart or not RootPart.Parent then
                 CtrlHeld = false
                 break
             end
             local Direction = RootPart.CFrame.LookVector
             RootPart.CFrame = RootPart.CFrame + Direction * TeleportDistance
-            wait(TeleportInterval) -- Changed from RunService.Heartbeat:Wait()
+            wait(TeleportInterval)
         end
     end
 end)
@@ -269,3 +279,24 @@ UserInputService.InputEnded:Connect(function(input)
         CtrlHeld = false
     end
 end)
+
+-- Kill tracking from QuestProgress
+local function TrackKills()
+    local playerStats = LocalPlayer:WaitForChild("PlayerStats", 10)
+    if not playerStats then return end
+
+    local questProgress = playerStats:WaitForChild("QuestProgress", 10)
+    if not questProgress then return end
+
+    LastQuestProgress = questProgress.Value
+
+    questProgress:GetPropertyChangedSignal("Value"):Connect(function()
+        if questProgress.Value > LastQuestProgress then
+            TotalKills += 1
+            UpdateCounter()
+        end
+        LastQuestProgress = questProgress.Value
+    end)
+end
+
+TrackKills()
