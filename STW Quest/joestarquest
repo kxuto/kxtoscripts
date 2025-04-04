@@ -44,17 +44,17 @@ CounterLabel.TextColor3 = Color3.new(1, 1, 1)
 CounterLabel.Text = "Kills: 0 / Valid: 0"
 CounterLabel.Parent = ScreenGui
 
+-- Kill Counter UI
+local KillCounterGui = Instance.new("TextLabel")
+KillCounterGui.Size = UDim2.new(0, 250, 0, 50)
+KillCounterGui.Position = UDim2.new(0, 10, 0, 130)
+KillCounterGui.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+KillCounterGui.TextColor3 = Color3.new(1, 1, 1)
+KillCounterGui.TextScaled = true
+KillCounterGui.Text = "Kills: 0"
+KillCounterGui.Name = "KillCounterUI"
+KillCounterGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- UI for Quest Progress / Max Progress
-local QuestGui = Instance.new("TextLabel")
-QuestGui.Size = UDim2.new(0, 250, 0, 50)
-QuestGui.Position = UDim2.new(0, 10, 0, 70)
-QuestGui.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-QuestGui.TextColor3 = Color3.new(1, 1, 1)
-QuestGui.TextScaled = true
-QuestGui.Text = "Quest: 0/0"
-QuestGui.Name = "QuestProgressUI"
-QuestGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 
 local function UpdateCounter()
