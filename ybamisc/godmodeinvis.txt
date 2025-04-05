@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Player = Players.LocalPlayer
 
+-- Utility functions
 local function GetCharacter()
     return Player.Character or Player.CharacterAdded:Wait()
 end
@@ -27,52 +28,55 @@ local function ToggleControlStand(State)
         repeat task.wait() until Character:FindFirstChild("StandMorph")
         local StandMorph = Character.StandMorph
         
-        -- Make character parts non-collidable (godmode) BUT keep them anchored
+        -- Disable stand attach constraints for better movement
+        StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignOrientation").Enabled = false
+        StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignPosition").Enabled = false
+        
+        -- Godmode (no collision) while keeping movement
         for _, v in pairs(Character:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.CanCollide = false
-                v.Anchored = true -- Prevents falling
+                -- v.Anchored = false (Don't anchor - allows movement)
             end
         end
         
-        -- Force camera to focus on stand (invisibility)
+        -- Force camera to focus on stand
         local CameraValue = Instance.new("ObjectValue", StandMorph.Parent)
         CameraValue.Name = "FocusCam"
         CameraValue.Value = StandMorph.AnimationController
         
-        -- Teleport character underground (invisibility) but anchored
+        -- Movement control (character follows stand underground)
         local ControlLoop
         ControlLoop = RunService.Heartbeat:Connect(function()
-            if not StandMorph then
-                RemoteFunc:InvokeServer("ToggleStand", "Toggle")
-                ControlLoop:Disconnect()
-                return
+            if not (StandMorph and StandMorph.PrimaryPart) then return end
+            
+            -- Move character underground (invisibility)
+            local HRP = GetHRP()
+            if HRP then
+                HRP.CFrame = StandMorph.PrimaryPart.CFrame - Vector3.new(0, 36, 0)
             end
-            GetHRP().CFrame = StandMorph.HumanoidRootPart.CFrame - Vector3.new(0, 36, 0)
+            
+            -- Sync movement input to stand
+            local Humanoid = GetHumanoid()
+            if Humanoid then
+                StandMorph.AnimationController:Move(Humanoid.MoveDirection, false)
+            end
         end)
         
         return function() -- Cleanup function
             ControlLoop:Disconnect()
             if CameraValue then CameraValue:Destroy() end
-            -- Restore collision & unanchor
-            for _, v in pairs(GetCharacter():GetDescendants()) do
-                if v:IsA("BasePart") then
-                    v.Anchored = false
-                end
-            end
             RemoteFunc:InvokeServer("ToggleStand", "Toggle")
         end
     end
 end
 
--- Toggle function
+-- Toggle system
 local Enabled = false
 local CleanupFunc
 
-local function Toggle()
+return function()
     Enabled = not Enabled
     if CleanupFunc then CleanupFunc() end
     CleanupFunc = ToggleControlStand(Enabled)
 end
-
-return Toggle
