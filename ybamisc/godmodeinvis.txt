@@ -1,8 +1,15 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local PhysicsService = game:GetService("PhysicsService")
 local Player = Players.LocalPlayer
 
--- Utility functions
+-- Create custom collision group if it doesn't exist
+if not PhysicsService:GetCollisionGroupName("GhostMode") then
+    PhysicsService:CreateCollisionGroup("GhostMode")
+    PhysicsService:CollisionGroupSetCollidable("GhostMode", "Default", false)
+    PhysicsService:CollisionGroupSetCollidable("GhostMode", "GhostMode", false)
+end
+
 local function GetCharacter()
     return Player.Character or Player.CharacterAdded:Wait()
 end
@@ -28,15 +35,20 @@ local function ToggleControlStand(State)
         repeat task.wait() until Character:FindFirstChild("StandMorph")
         local StandMorph = Character.StandMorph
         
-        -- Disable stand attach constraints for better movement
+        -- Disable stand attach constraints
         StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignOrientation").Enabled = false
         StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignPosition").Enabled = false
         
-        -- Godmode (no collision) while keeping movement
-        for _, v in pairs(Character:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.CanCollide = false
-                -- v.Anchored = false (Don't anchor - allows movement)
+        -- Apply ghost collision to character and stand
+        for _,v in pairs(Character:GetDescendants()) do
+            if v:IsA("BasePart") or v:IsA("UnionOperation") then
+                PhysicsService:SetPartCollisionGroup(v, "GhostMode")
+            end
+        end
+        
+        for _,v in pairs(StandMorph:GetDescendants()) do
+            if v:IsA("BasePart") or v:IsA("UnionOperation") then
+                PhysicsService:SetPartCollisionGroup(v, "GhostMode")
             end
         end
         
@@ -45,7 +57,7 @@ local function ToggleControlStand(State)
         CameraValue.Name = "FocusCam"
         CameraValue.Value = StandMorph.AnimationController
         
-        -- Movement control (character follows stand underground)
+        -- Movement control
         local ControlLoop
         ControlLoop = RunService.Heartbeat:Connect(function()
             if not (StandMorph and StandMorph.PrimaryPart) then return end
@@ -56,7 +68,7 @@ local function ToggleControlStand(State)
                 HRP.CFrame = StandMorph.PrimaryPart.CFrame - Vector3.new(0, 36, 0)
             end
             
-            -- Sync movement input to stand
+            -- Sync movement
             local Humanoid = GetHumanoid()
             if Humanoid then
                 StandMorph.AnimationController:Move(Humanoid.MoveDirection, false)
@@ -66,7 +78,23 @@ local function ToggleControlStand(State)
         return function() -- Cleanup function
             ControlLoop:Disconnect()
             if CameraValue then CameraValue:Destroy() end
-            RemoteFunc:InvokeServer("ToggleStand", "Toggle")
+            
+            -- Restore collision
+            local Character = GetCharacter()
+            for _,v in pairs(Character:GetDescendants()) do
+                if v:IsA("BasePart") or v:IsA("UnionOperation") then
+                    PhysicsService:SetPartCollisionGroup(v, "Default")
+                end
+            end
+            
+            if Character:FindFirstChild("StandMorph") then
+                for _,v in pairs(Character.StandMorph:GetDescendants()) do
+                    if v:IsA("BasePart") or v:IsA("UnionOperation") then
+                        PhysicsService:SetPartCollisionGroup(v, "Default")
+                    end
+                end
+                RemoteFunc:InvokeServer("ToggleStand", "Toggle")
+            end
         end
     end
 end
