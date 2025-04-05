@@ -27,10 +27,11 @@ local function ToggleControlStand(State)
         repeat task.wait() until Character:FindFirstChild("StandMorph")
         local StandMorph = Character.StandMorph
         
-        -- Make character parts non-collidable (godmode)
+        -- Make character parts non-collidable (godmode) BUT keep them anchored
         for _, v in pairs(Character:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.CanCollide = false
+                v.Anchored = true -- Prevents falling
             end
         end
         
@@ -39,7 +40,7 @@ local function ToggleControlStand(State)
         CameraValue.Name = "FocusCam"
         CameraValue.Value = StandMorph.AnimationController
         
-        -- Teleport character underground (invisibility)
+        -- Teleport character underground (invisibility) but anchored
         local ControlLoop
         ControlLoop = RunService.Heartbeat:Connect(function()
             if not StandMorph then
@@ -53,6 +54,12 @@ local function ToggleControlStand(State)
         return function() -- Cleanup function
             ControlLoop:Disconnect()
             if CameraValue then CameraValue:Destroy() end
+            -- Restore collision & unanchor
+            for _, v in pairs(GetCharacter():GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Anchored = false
+                end
+            end
             RemoteFunc:InvokeServer("ToggleStand", "Toggle")
         end
     end
@@ -62,8 +69,10 @@ end
 local Enabled = false
 local CleanupFunc
 
-return function()
+local function Toggle()
     Enabled = not Enabled
     if CleanupFunc then CleanupFunc() end
     CleanupFunc = ToggleControlStand(Enabled)
 end
+
+return Toggle
