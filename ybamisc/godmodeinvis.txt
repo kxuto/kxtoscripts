@@ -1,0 +1,69 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Player = Players.LocalPlayer
+
+local function GetCharacter()
+    return Player.Character or Player.CharacterAdded:Wait()
+end
+
+local function GetHumanoid()
+    return GetCharacter():FindFirstChildOfClass("Humanoid")
+end
+
+local function GetHRP()
+    return GetCharacter():FindFirstChild("HumanoidRootPart")
+end
+
+local function ToggleControlStand(State)
+    if State then
+        -- Summon stand if not already out
+        local Character = GetCharacter()
+        local RemoteFunc = Character:FindFirstChild("RemoteFunction")
+        
+        if not Character:FindFirstChild("StandMorph") then
+            RemoteFunc:InvokeServer("ToggleStand", "Toggle")
+        end
+        
+        repeat task.wait() until Character:FindFirstChild("StandMorph")
+        local StandMorph = Character.StandMorph
+        
+        -- Make character parts non-collidable (godmode)
+        for _, v in pairs(Character:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+            end
+        end
+        
+        -- Force camera to focus on stand (invisibility)
+        local CameraValue = Instance.new("ObjectValue", StandMorph.Parent)
+        CameraValue.Name = "FocusCam"
+        CameraValue.Value = StandMorph.AnimationController
+        
+        -- Teleport character underground (invisibility)
+        local ControlLoop
+        ControlLoop = RunService.Heartbeat:Connect(function()
+            if not StandMorph then
+                RemoteFunc:InvokeServer("ToggleStand", "Toggle")
+                ControlLoop:Disconnect()
+                return
+            end
+            GetHRP().CFrame = StandMorph.HumanoidRootPart.CFrame - Vector3.new(0, 36, 0)
+        end)
+        
+        return function() -- Cleanup function
+            ControlLoop:Disconnect()
+            if CameraValue then CameraValue:Destroy() end
+            RemoteFunc:InvokeServer("ToggleStand", "Toggle")
+        end
+    end
+end
+
+-- Toggle function
+local Enabled = false
+local CleanupFunc
+
+return function()
+    Enabled = not Enabled
+    if CleanupFunc then CleanupFunc() end
+    CleanupFunc = ToggleControlStand(Enabled)
+end
