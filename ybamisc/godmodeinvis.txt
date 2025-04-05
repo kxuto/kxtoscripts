@@ -1,9 +1,10 @@
+-- Control Stand (Godmode/Invisibility) - Optimized Standalone Version
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
 local Player = Players.LocalPlayer
 
--- Create custom collision group if it doesn't exist
+-- Create collision group if it doesn't exist
 if not PhysicsService:GetCollisionGroupName("GhostMode") then
     PhysicsService:CreateCollisionGroup("GhostMode")
     PhysicsService:CollisionGroupSetCollidable("GhostMode", "Default", false)
@@ -22,12 +23,25 @@ local function GetHRP()
     return GetCharacter():FindFirstChild("HumanoidRootPart")
 end
 
-local function ToggleControlStand(State)
-    if State then
-        -- Summon stand if not already out
+local function Notification(title, text, duration)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = title,
+        Text = text,
+        Duration = duration
+    })
+end
+
+local ControlEnabled = false
+local CameraValue, TempStore
+local StandTPLoop, JumpSignal
+
+local function ToggleControlStand(enable)
+    if enable then
+        -- Initialize
         local Character = GetCharacter()
         local RemoteFunc = Character:FindFirstChild("RemoteFunction")
         
+        -- Summon stand if needed
         if not Character:FindFirstChild("StandMorph") then
             RemoteFunc:InvokeServer("ToggleStand", "Toggle")
         end
@@ -35,13 +49,25 @@ local function ToggleControlStand(State)
         repeat task.wait() until Character:FindFirstChild("StandMorph")
         local StandMorph = Character.StandMorph
         
-        -- Disable stand attach constraints
-        StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignOrientation").Enabled = false
-        StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignPosition").Enabled = false
+        -- Set up storage for Naples' Sewers
+        TempStore = Instance.new("Folder", game.ReplicatedStorage)
+        TempStore.Name = "TempStorage"
         
-        -- Apply ghost collision to character and stand
+        -- Hide Naples' Sewers
+        for _,v in pairs(workspace.Locations:GetChildren()) do
+            if v.Name == "Naples' Sewers" then
+                v.Parent = TempStore
+            end
+        end
+        
+        -- Set up camera focus
+        CameraValue = Instance.new("ObjectValue", StandMorph.Parent)
+        CameraValue.Name = "FocusCam"
+        CameraValue.Value = StandMorph.AnimationController
+        
+        -- Apply ghost collision
         for _,v in pairs(Character:GetDescendants()) do
-            if v:IsA("BasePart") or v:IsA("UnionOperation") then
+            if v:IsA("BasePart") then
                 PhysicsService:SetPartCollisionGroup(v, "GhostMode")
             end
         end
@@ -52,59 +78,69 @@ local function ToggleControlStand(State)
             end
         end
         
-        -- Force camera to focus on stand
-        local CameraValue = Instance.new("ObjectValue", StandMorph.Parent)
-        CameraValue.Name = "FocusCam"
-        CameraValue.Value = StandMorph.AnimationController
+        -- Disable stand constraints
+        StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignOrientation").Enabled = false
+        StandMorph.PrimaryPart.StandAttach:FindFirstChild("AlignPosition").Enabled = false
         
-        -- Movement control
-        local ControlLoop
-        ControlLoop = RunService.Heartbeat:Connect(function()
-            if not (StandMorph and StandMorph.PrimaryPart) then return end
-            
-            -- Move character underground (invisibility)
-            local HRP = GetHRP()
-            if HRP then
-                HRP.CFrame = StandMorph.PrimaryPart.CFrame - Vector3.new(0, 36, 0)
-            end
-            
-            -- Sync movement
-            local Humanoid = GetHumanoid()
-            if Humanoid then
-                StandMorph.AnimationController:Move(Humanoid.MoveDirection, false)
+        -- Jump synchronization
+        JumpSignal = GetHumanoid():GetPropertyChangedSignal("Jump"):Connect(function()
+            if GetHumanoid().Jump then
+                StandMorph.AnimationController.Jump = true
             end
         end)
         
-        return function() -- Cleanup function
-            ControlLoop:Disconnect()
-            if CameraValue then CameraValue:Destroy() end
+        -- Main control loop
+        StandTPLoop = RunService.Heartbeat:Connect(function()
+            local Camera = workspace.CurrentCamera
+            local MoveDirection = Camera.CFrame:VectorToObjectSpace(GetHumanoid().MoveDirection)
+            StandMorph.AnimationController:Move(MoveDirection, true)
             
-            -- Restore collision
-            local Character = GetCharacter()
-            for _,v in pairs(Character:GetDescendants()) do
+            if not StandMorph.PrimaryPart then return end
+            GetHRP().CFrame = StandMorph.PrimaryPart.CFrame - Vector3.new(0, 36, 0)
+        end)
+        
+        Notification("Control Stand", "Now controlling stand!", 5)
+    else
+        -- Cleanup
+        if StandTPLoop then StandTPLoop:Disconnect() end
+        if JumpSignal then JumpSignal:Disconnect() end
+        
+        -- Restore Naples' Sewers
+        if TempStore then
+            for _,v in pairs(TempStore:GetChildren()) do
+                if v.Name == "Naples' Sewers" then
+                    v.Parent = workspace.Locations
+                end
+            end
+            TempStore:Destroy()
+        end
+        
+        -- Restore collision
+        local Character = GetCharacter()
+        for _,v in pairs(Character:GetDescendants()) do
+            if v:IsA("BasePart") then
+                PhysicsService:SetPartCollisionGroup(v, "Default")
+            end
+        end
+        
+        if Character:FindFirstChild("StandMorph") then
+            for _,v in pairs(Character.StandMorph:GetDescendants()) do
                 if v:IsA("BasePart") or v:IsA("UnionOperation") then
                     PhysicsService:SetPartCollisionGroup(v, "Default")
                 end
             end
-            
-            if Character:FindFirstChild("StandMorph") then
-                for _,v in pairs(Character.StandMorph:GetDescendants()) do
-                    if v:IsA("BasePart") or v:IsA("UnionOperation") then
-                        PhysicsService:SetPartCollisionGroup(v, "Default")
-                    end
-                end
-                RemoteFunc:InvokeServer("ToggleStand", "Toggle")
-            end
+            local StandPos = Character.StandMorph.PrimaryPart.CFrame
+            Character:FindFirstChild("HumanoidRootPart").CFrame = StandPos
+            Character:FindFirstChild("RemoteFunction"):InvokeServer("ToggleStand", "Toggle")
         end
+        
+        if CameraValue then CameraValue:Destroy() end
+        Notification("Control Stand", "Stopped controlling stand!", 5)
     end
 end
 
--- Toggle system
-local Enabled = false
-local CleanupFunc
-
+-- Toggle function
 return function()
-    Enabled = not Enabled
-    if CleanupFunc then CleanupFunc() end
-    CleanupFunc = ToggleControlStand(Enabled)
+    ControlEnabled = not ControlEnabled
+    ToggleControlStand(ControlEnabled)
 end
